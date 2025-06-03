@@ -8,7 +8,7 @@ import {
   executeInContainer,
 } from '../docker_manager.js'; 
 import { getAgentToolCredentials } from '../agentopia_api_client.js';
-import { managedInstances, ManagedToolInstance } from '../index.js';
+import { managedInstances } from '../index.js';
 import Dockerode from 'dockerode';
 
 const router = express.Router();
@@ -157,6 +157,13 @@ router.post('/', async (req: Request, res: Response) => {
 router.delete('/:instanceNameOnToolbox', async (req: Request, res: Response) => {
   const { instanceNameOnToolbox } = req.params;
 
+  if (!instanceNameOnToolbox) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing instanceNameOnToolbox parameter.',
+    });
+  }
+
   if (!managedInstances.has(instanceNameOnToolbox)) {
     return res.status(404).json({
         success: false,
@@ -200,6 +207,13 @@ router.delete('/:instanceNameOnToolbox', async (req: Request, res: Response) => 
  */
 router.post('/:instanceNameOnToolbox/start', async (req: Request, res: Response) => {
   const { instanceNameOnToolbox } = req.params;
+
+  if (!instanceNameOnToolbox) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing instanceNameOnToolbox parameter.',
+    });
+  }
 
   if (!managedInstances.has(instanceNameOnToolbox)) {
     return res.status(404).json({
@@ -254,6 +268,13 @@ router.post('/:instanceNameOnToolbox/start', async (req: Request, res: Response)
 router.post('/:instanceNameOnToolbox/stop', async (req: Request, res: Response) => {
   const { instanceNameOnToolbox } = req.params;
 
+  if (!instanceNameOnToolbox) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing instanceNameOnToolbox parameter.',
+    });
+  }
+
   if (!managedInstances.has(instanceNameOnToolbox)) {
     return res.status(404).json({
       success: false,
@@ -301,6 +322,13 @@ router.post('/:instanceNameOnToolbox/execute', async (req: Request, res: Respons
     capabilityName,
     payload = {},
   } = req.body;
+
+  if (!instanceNameOnToolbox) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing instanceNameOnToolbox parameter.',
+    });
+  }
 
   const managedInstance = managedInstances.get(instanceNameOnToolbox);
 
@@ -367,19 +395,18 @@ router.post('/:instanceNameOnToolbox/execute', async (req: Request, res: Respons
     console.log(`Prepared command for execution: ${commandToRun.join(' ')}`);
 
     // 4. Execute command in container
-    const executionOutput = await executeInContainer(
+    const executionResult = await executeInContainer(
       instanceNameOnToolbox,
-      commandToRun,
-      envVarsForExec
+      commandToRun
     );
     console.log(`Execution of '${capabilityName}' completed for '${instanceNameOnToolbox}'.`);
 
     // 5. Respond with the output
     // Output might be plain text or JSON, depending on the tool.
     // Try to parse as JSON, otherwise return as text.
-    let responseData: any = executionOutput;
+    let responseData: any = executionResult.output;
     try {
-        responseData = JSON.parse(executionOutput);
+        responseData = JSON.parse(executionResult.output);
     } catch (e) {
         // Not JSON, treat as plain text
         console.log('Execution output was not JSON, returning as text.');
@@ -388,7 +415,10 @@ router.post('/:instanceNameOnToolbox/execute', async (req: Request, res: Respons
     res.status(200).json({
       success: true,
       message: `Capability '${capabilityName}' executed successfully.`,      
-      data: responseData,
+      data: {
+        output: responseData,
+        exitCode: executionResult.exitCode
+      },
     });
 
   } catch (error: any) {
